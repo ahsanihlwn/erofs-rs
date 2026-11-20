@@ -1,11 +1,8 @@
 erofs-rs is licensed under the MIT License (see LICENSE).
 
-This implementation was written in Rust with reference to the EROFS on-disk
-specification and erofs-utils
-(https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git),
-electing the MIT license terms of its dual "GPL-2.0+ OR MIT" headers (such as
-include/erofs_fs.h, lib/super.c, lib/zmap.c, and lib/decompress.c).
-The respective copyright holders (Gao Xiang, Huawei, Alibaba Cloud, OPPO, and
-other contributors) retain their copyrights.
-
-No GPL-only code from third-party extractors is included in this repository.
+This implementation is written in Rust against the EROFS on-disk format
+specification and MIT-licensed format definitions from erofs-utils
+(https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git,
+including include/erofs_fs.h and related MIT-licensed headers).
+Respective upstream copyright holders (Gao Xiang, Huawei, Alibaba Cloud, OPPO,
+and contributors) retain their copyrights in those upstream definitions.
