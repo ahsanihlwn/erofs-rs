@@ -693,8 +693,8 @@ fn cmd_unpack(args: &[String], offset: u64, json_mode: bool) -> Result<()> {
         if let Some(ref c) = report.file_contexts {
             println!("file_contexts: {c}");
         }
-        if let Some(ref c) = report.build_info {
-            println!("build_info:  {c}");
+        if let Some(ref c) = report.fs_options {
+            println!("fs_options:    {c}");
         }
         println!(
             "Summary:       {} files, {} dirs, {} symlinks ({} skipped), {} hardlinks, {} written in {:.3}s",

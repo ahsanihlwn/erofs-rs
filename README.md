@@ -8,7 +8,7 @@ Licensed under the permissive **MIT License**.
 
 ## Features
 
-- **Android ROM Kitchen Ready**: Multi-threaded unpack emitting standard AOSP `fs_config`, SELinux `file_contexts`, `fs_options`, and `build_info` metadata.
+- **Android ROM Kitchen Ready**: Multi-threaded unpack emitting standard AOSP `fs_config`, SELinux `file_contexts`, and `fs_options` metadata.
 - **Multiple Compression Engines**: Supports `none`, `lz4`, `lz4hc`, `deflate`, `zstd`, and `lzma` (MicroLZMA) with configurable cluster sizes (4K, 16K, etc.).
 - **Direct Image Editing**: Modify files (`edit write`), file modes (`edit chmod`), SELinux contexts (`edit selinux`), or delete entries (`edit rm`) directly inside the image without unpacking.
 - **In-Place Compaction**: Reclaim internal slack and relocate metadata blocks in-place (`compact`).
@@ -79,7 +79,6 @@ Generated metadata files in `<out>/config/`:
 - `<partition>_fs_config` — AOSP filesystem configuration (UID, GID, octal mode, capabilities).
 - `<partition>_file_contexts` — SELinux context rules with standard regex escaping.
 - `<partition>_fs_options` — ROM kitchen repack parameters and filesystem timestamps.
-- `<partition>_build_info` — Detailed key-value filesystem properties and repack command.
 
 ### Image Packing
 

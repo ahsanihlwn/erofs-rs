@@ -76,17 +76,17 @@ fn make_file_contexts_path(internal: &str, partition_name: &str) -> String {
 pub struct GeneratedConfigs {
     pub fs_config_path: PathBuf,
     pub file_contexts_path: PathBuf,
-    pub build_info_path: Option<PathBuf>,
+    pub fs_options_path: Option<PathBuf>,
 }
 
-/// Write `<base>_fs_config`, `<base>_file_contexts`, and optionally `<base>_build_info`.
+/// Write `<base>_fs_config`, `<base>_file_contexts`, and optionally `<base>_fs_options`.
 pub fn write_android_configs(
     img: &ErofsImage,
     nodes: &[FileNode],
     config_dir: &Path,
     extract_dir: &Path,
     image_base_name: &str,
-    write_build_info: bool,
+    write_fs_options: bool,
 ) -> Result<GeneratedConfigs> {
     fs::create_dir_all(config_dir)?;
     let fs_config_path = config_dir.join(format!("{image_base_name}_fs_config"));
@@ -154,9 +154,9 @@ pub fn write_android_configs(
         }
     }
 
-    let build_info_path = if write_build_info {
-        let p = config_dir.join(format!("{image_base_name}_build_info"));
-        let mut opt_file = File::create(&p)?;
+    let fs_options_path = if write_fs_options {
+        let fo_path = config_dir.join(format!("{image_base_name}_fs_options"));
+        let mut fo_file = File::create(&fo_path)?;
         let ts = img.sb.build_timestamp();
         let uuid = img.sb.uuid_string();
         let big_pc = img.sb.has_big_pcluster();
@@ -166,52 +166,23 @@ pub fn write_android_configs(
             .first()
             .copied()
             .unwrap_or("lz4hc");
-        let mut kv = |k: &str, v: String| writeln!(opt_file, "{k} = {v}");
-        kv("block_size", img.sb.block_size.to_string())?;
-        kv("timestamp", ts.to_string())?;
-        kv("uuid", uuid.clone())?;
-        kv("volume_label", img.sb.volume_name.clone())?;
-        kv("algorithm", algo.to_string())?;
-        kv("big_pcluster", big_pc.to_string())?;
-        kv("inodes", img.sb.inos.to_string())?;
-        kv("compat_features", img.sb.compat_feature_names().join(","))?;
-        kv("incompat_features", img.sb.incompat_feature_names().join(","))?;
-        kv("digest_xattr", img.ishare_xattr_name().unwrap_or_default())?;
-        kv(
-            "repack",
-            format!(
-                "erofs-rs pack {} {}_repack.img --algo {algo} {}--block-size {} --timestamp {ts} --uuid {uuid} --mount-point /{image_base_name} --fs-config {} --file-contexts {}",
-                extract_dir.display(),
-                image_base_name,
-                if big_pc { "--pcluster 16384 " } else { "" },
-                img.sb.block_size,
-                fs_config_path.display(),
-                file_contexts_path.display()
-            ),
+        let pcluster_opt = if big_pc { "-C 16384 " } else { "" };
+        let digest_opt = if img.ishare_xattr_name().is_some() {
+            "--xattr-inode-digest "
+        } else {
+            ""
+        };
+        writeln!(fo_file, "Filesystem created:    Thu Jan  1 07:00:00 1970")?;
+        writeln!(fo_file, "Filesystem UUID:       {uuid}")?;
+        writeln!(
+            fo_file,
+            "mkfs.erofs options:    -z{algo} {pcluster_opt}-T {ts} -U {uuid} {digest_opt}--mount-point=/{image_base_name} --fs-config-file={} --file-contexts={} {}_repack.img {}",
+            fs_config_path.display(),
+            file_contexts_path.display(),
+            image_base_name,
+            extract_dir.display(),
         )?;
-
-        // Also write standard Android ROM kitchen `<partition>_fs_options`
-        let fo_path = config_dir.join(format!("{image_base_name}_fs_options"));
-        if let Ok(mut fo_file) = File::create(&fo_path) {
-            let pcluster_opt = if big_pc { "-C 16384 " } else { "" };
-            let digest_opt = if img.ishare_xattr_name().is_some() {
-                "--xattr-inode-digest "
-            } else {
-                ""
-            };
-            let _ = writeln!(fo_file, "Filesystem created:    Thu Jan  1 07:00:00 1970");
-            let _ = writeln!(fo_file, "Filesystem UUID:       {uuid}");
-            let _ = writeln!(
-                fo_file,
-                "mkfs.erofs options:    -z{algo} {pcluster_opt}-T {ts} -U {uuid} {digest_opt}--mount-point=/{image_base_name} --fs-config-file={} --file-contexts={} {}_repack.img {}",
-                fs_config_path.display(),
-                file_contexts_path.display(),
-                image_base_name,
-                extract_dir.display(),
-            );
-        }
-
-        Some(p)
+        Some(fo_path)
     } else {
         None
     };
@@ -219,7 +190,7 @@ pub fn write_android_configs(
     Ok(GeneratedConfigs {
         fs_config_path,
         file_contexts_path,
-        build_info_path,
+        fs_options_path,
     })
 }
 
