@@ -123,19 +123,14 @@ pub fn write_android_configs(
             }
         }
 
-        // After root inode: inject partition-root dir + lost+found in both files.
+        // After root inode: inject partition-root dir in fs_config, and partition rules in file_contexts.
         if !wrote_root_extras && node.path == "/" {
             wrote_root_extras = true;
 
-            // fs_config: `<partition>/ uid gid mode` then `<partition>/lost+found uid gid mode`
+            // fs_config: `<partition> uid gid mode` (without trailing slash, no synthetic lost+found)
             writeln!(
                 fc_file,
-                "{}/ {} {} {:04o}",
-                image_base_name, node.uid, node.gid, node.mode & 0o7777
-            )?;
-            writeln!(
-                fc_file,
-                "{}/lost+found {} {} {:04o}",
+                "{} {} {} {:04o}",
                 image_base_name, node.uid, node.gid, node.mode & 0o7777
             )?;
 
