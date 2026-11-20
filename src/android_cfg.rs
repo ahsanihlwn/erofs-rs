@@ -12,10 +12,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// Escape regex metacharacters for Android `file_contexts` entries.
+/// Only escapes: `.` `+` `[` `]` `*` — matching standard Android tooling behavior.
 pub fn escape_file_context_path(path: &str) -> String {
     let mut out = String::with_capacity(path.len() + 8);
     for ch in path.chars() {
-        if matches!(ch, '.' | '+' | '[' | ']' | '*' | '(' | ')' | '?' | '^' | '$') {
+        if matches!(ch, '.' | '+' | '[' | ']' | '*') {
             out.push('\\');
         }
         out.push(ch);
@@ -23,15 +24,15 @@ pub fn escape_file_context_path(path: &str) -> String {
     out
 }
 
-/// Format one `fs_config` line: `<path> <uid> <gid> <mode_octal>[ capabilities=0x<HEX>]`.
-pub fn format_fs_config_line(node: &FileNode) -> String {
-    let mut line = format!(
-        "{} {} {} {:04o}",
-        node.path,
-        node.uid,
-        node.gid,
-        node.mode & 0o7777
-    );
+/// Format one `fs_config` line with partition-prefixed path.
+///
+/// `node.path` is the EROFS-internal absolute path (e.g. `/apex/foo`).
+/// `partition_name` is the mount-point basename (e.g. `system_ext`).
+/// Output: `system_ext/apex/foo <uid> <gid> <mode>[ capabilities=0xHEX]`
+/// For the root inode (`node.path == "/"`), output is `/ <uid> <gid> <mode>`.
+pub fn format_fs_config_line(node: &FileNode, partition_name: &str) -> String {
+    let path = make_fs_config_path(&node.path, partition_name);
+    let mut line = format!("{} {} {} {:04o}", path, node.uid, node.gid, node.mode & 0o7777);
     if let Some(cap) = node.capabilities {
         if cap != 0 {
             line.push_str(&format!(" capabilities=0x{cap:X}"));
@@ -40,9 +41,35 @@ pub fn format_fs_config_line(node: &FileNode) -> String {
     line
 }
 
-/// Format one `file_contexts` line: `<escaped_path> <selinux_context>`.
-pub fn format_file_context_line(path: &str, selinux: &str) -> String {
-    format!("{} {}", escape_file_context_path(path), selinux)
+/// Format one `file_contexts` line.
+///
+/// `node_path` is the EROFS-internal absolute path (e.g. `/apex/foo`).
+/// `partition_name` is the mount-point basename (e.g. `system_ext`).
+/// Output: `/system_ext/apex/foo <selinux_context>`
+/// For root (`node_path == "/"`), output is `/ <ctx>`.
+pub fn format_file_context_line(node_path: &str, partition_name: &str, selinux: &str) -> String {
+    let path = make_file_contexts_path(node_path, partition_name);
+    format!("{} {}", escape_file_context_path(&path), selinux)
+}
+
+/// Build the fs_config path string for a given EROFS-internal path.
+/// Root `/` → `"/"`, others → `"<partition>/<rest>"` (no leading slash).
+fn make_fs_config_path(internal: &str, partition_name: &str) -> String {
+    if internal == "/" {
+        "/".to_string()
+    } else {
+        format!("{}/{}", partition_name, internal.trim_start_matches('/'))
+    }
+}
+
+/// Build the file_contexts path string for a given EROFS-internal path.
+/// Root `/` → `"/"`, others → `"/<partition>/<rest>"`.
+fn make_file_contexts_path(internal: &str, partition_name: &str) -> String {
+    if internal == "/" {
+        "/".to_string()
+    } else {
+        format!("/{}{}", partition_name, internal)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -70,24 +97,58 @@ pub fn write_android_configs(
 
     let mut wrote_root_extras = false;
     for node in nodes {
-        writeln!(fc_file, "{}", format_fs_config_line(node))?;
-        if let Some(ctx) = &node.selinux {
-            if !ctx.is_empty() {
-                writeln!(sx_file, "{}", format_file_context_line(&node.path, ctx))?;
+        // ── fs_config ──────────────────────────────────────────────────────────
+        // Root inode → `/ uid gid mode`
+        // Others     → `<partition>/path uid gid mode`
+        let fc_path = make_fs_config_path(&node.path, image_base_name);
+        let mut fc_line = format!("{} {} {} {:04o}", fc_path, node.uid, node.gid, node.mode & 0o7777);
+        if let Some(cap) = node.capabilities {
+            if cap != 0 {
+                fc_line.push_str(&format!(" capabilities=0x{cap:X}"));
             }
         }
+        writeln!(fc_file, "{}", fc_line)?;
+
+        // ── file_contexts ───────────────────────────────────────────────────────
+        if let Some(raw_ctx) = &node.selinux {
+            let ctx = raw_ctx.trim_end_matches('\0');
+            if !ctx.is_empty() {
+                if node.path == "/" {
+                    // Write: `/ ctx`
+                    writeln!(sx_file, "/ {}", ctx)?;
+                } else {
+                    let sx_path = make_file_contexts_path(&node.path, image_base_name);
+                    writeln!(sx_file, "{} {}", escape_file_context_path(&sx_path), ctx)?;
+                }
+            }
+        }
+
+        // After root inode: inject partition-root dir + lost+found in both files.
         if !wrote_root_extras && node.path == "/" {
             wrote_root_extras = true;
+
+            // fs_config: `<partition>/ uid gid mode` then `<partition>/lost+found uid gid mode`
             writeln!(
                 fc_file,
-                "/lost+found {} {} {:04o}",
-                node.uid,
-                node.gid,
-                node.mode & 0o7777
+                "{}/ {} {} {:04o}",
+                image_base_name, node.uid, node.gid, node.mode & 0o7777
             )?;
-            if let Some(ctx) = &node.selinux {
+            writeln!(
+                fc_file,
+                "{}/lost+found {} {} {:04o}",
+                image_base_name, node.uid, node.gid, node.mode & 0o7777
+            )?;
+
+            // file_contexts: `/<partition> ctx`, `/<partition>/ ctx`, `/<partition>/lost\+found ctx`
+            if let Some(raw_ctx) = &node.selinux {
+                let ctx = raw_ctx.trim_end_matches('\0');
                 if !ctx.is_empty() {
-                    writeln!(sx_file, "{}", format_file_context_line("/lost+found", ctx))?;
+                    writeln!(sx_file, "/{} {}", image_base_name, ctx)?;
+                    writeln!(sx_file, "/{}/ {}", image_base_name, ctx)?;
+                    let lost_path = escape_file_context_path(
+                        &format!("/{}/lost+found", image_base_name)
+                    );
+                    writeln!(sx_file, "{} {}", lost_path, ctx)?;
                 }
             }
         }
@@ -119,7 +180,7 @@ pub fn write_android_configs(
         kv(
             "repack",
             format!(
-                "erofs-rs pack {} {}_repack.img --algo {algo} {}--block-size {} --timestamp {ts} --uuid {uuid} --fs-config {} --file-contexts {}",
+                "erofs-rs pack {} {}_repack.img --algo {algo} {}--block-size {} --timestamp {ts} --uuid {uuid} --mount-point /{image_base_name} --fs-config {} --file-contexts {}",
                 extract_dir.display(),
                 image_base_name,
                 if big_pc { "--pcluster 16384 " } else { "" },
@@ -128,6 +189,28 @@ pub fn write_android_configs(
                 file_contexts_path.display()
             ),
         )?;
+
+        // Also write standard Android ROM kitchen `<partition>_fs_options`
+        let fo_path = config_dir.join(format!("{image_base_name}_fs_options"));
+        if let Ok(mut fo_file) = File::create(&fo_path) {
+            let pcluster_opt = if big_pc { "-C 16384 " } else { "" };
+            let digest_opt = if img.ishare_xattr_name().is_some() {
+                "--xattr-inode-digest "
+            } else {
+                ""
+            };
+            let _ = writeln!(fo_file, "Filesystem created:    Thu Jan  1 07:00:00 1970");
+            let _ = writeln!(fo_file, "Filesystem UUID:       {uuid}");
+            let _ = writeln!(
+                fo_file,
+                "mkfs.erofs options:    -z{algo} {pcluster_opt}-T {ts} -U {uuid} {digest_opt}--mount-point=/{image_base_name} --fs-config-file={} --file-contexts={} {}_repack.img {}",
+                fs_config_path.display(),
+                file_contexts_path.display(),
+                image_base_name,
+                extract_dir.display(),
+            );
+        }
+
         Some(p)
     } else {
         None
