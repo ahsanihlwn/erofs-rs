@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 //! Android `fs_config`, `file_contexts`, and `build_info` generator and parser.
-//! Produces output fully compatible with Android ROM kitchens, `extract.erofs`, and `mkfs.erofs`.
+//! Emits standard Android `fs_config` / `file_contexts` entries alongside `erofs-rs` `build_info`.
 
 use crate::error::{ErofsError, Result};
 use crate::reader::{ErofsImage, FileNode};
