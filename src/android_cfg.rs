@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-//! Android `fs_config`, `file_contexts`, and `mkfs_options` generator and parser.
+//! Android `fs_config`, `file_contexts`, and `build_info` generator and parser.
 //! Produces output fully compatible with Android ROM kitchens, `extract.erofs`, and `mkfs.erofs`.
 
 use crate::error::{ErofsError, Result};
@@ -49,17 +49,17 @@ pub fn format_file_context_line(path: &str, selinux: &str) -> String {
 pub struct GeneratedConfigs {
     pub fs_config_path: PathBuf,
     pub file_contexts_path: PathBuf,
-    pub mkfs_options_path: Option<PathBuf>,
+    pub build_info_path: Option<PathBuf>,
 }
 
-/// Write `<base>_fs_config`, `<base>_file_contexts`, and optionally `<base>_mkfs_options`.
+/// Write `<base>_fs_config`, `<base>_file_contexts`, and optionally `<base>_build_info`.
 pub fn write_android_configs(
     img: &ErofsImage,
     nodes: &[FileNode],
     config_dir: &Path,
     extract_dir: &Path,
     image_base_name: &str,
-    write_mkfs_options: bool,
+    write_build_info: bool,
 ) -> Result<GeneratedConfigs> {
     fs::create_dir_all(config_dir)?;
     let fs_config_path = config_dir.join(format!("{image_base_name}_fs_config"));
@@ -93,44 +93,41 @@ pub fn write_android_configs(
         }
     }
 
-    let mkfs_options_path = if write_mkfs_options {
-        let p = config_dir.join(format!("{image_base_name}_mkfs_options"));
+    let build_info_path = if write_build_info {
+        let p = config_dir.join(format!("{image_base_name}_build_info"));
         let mut opt_file = File::create(&p)?;
         let ts = img.sb.build_timestamp();
         let uuid = img.sb.uuid_string();
         let big_pc = img.sb.has_big_pcluster();
-        let digest_flag = if img.ishare_xattr_name().is_some() {
-            "--xattr-inode-digest "
-        } else {
-            ""
-        };
         let algo = img
             .sb
             .algorithm_names()
             .first()
             .copied()
             .unwrap_or("lz4hc");
-        writeln!(opt_file, "Filesystem created:    {ts} (unix epoch)")?;
-        writeln!(opt_file, "Filesystem UUID:       {uuid}")?;
-        writeln!(
-            opt_file,
-            "mkfs.erofs options:    -z{algo} {}-T {ts} -U {uuid} {digest_flag}--fs-config-file={} --file-contexts={} {} {}",
-            if big_pc { "-C 16384 " } else { "" },
-            fs_config_path.display(),
-            file_contexts_path.display(),
-            format!("{image_base_name}_repack.img"),
-            extract_dir.display()
-        )?;
-        writeln!(
-            opt_file,
-            "erofs-rs pack options: erofs-rs pack {} {} --algo {algo} {}--timestamp {ts} --uuid {uuid} --fs-config {} --file-contexts {}",
-            extract_dir.display(),
-            format!("{image_base_name}_repack.img"),
-            if big_pc { "--pcluster 16384 " } else { "" },
-            fs_config_path.display(),
-            file_contexts_path.display(),
-        )?;
-        Some(p)
+        let mut kv = |k: &str, v: String| writeln!(opt_file, "{k} = {v}");
+        kv("block_size", img.sb.block_size.to_string())?;
+        kv("timestamp", ts.to_string())?;
+        kv("uuid", uuid.clone())?;
+        kv("volume_label", img.sb.volume_name.clone())?;
+        kv("algorithm", algo.to_string())?;
+        kv("big_pcluster", big_pc.to_string())?;
+        kv("inodes", img.sb.inos.to_string())?;
+        kv("compat_features", img.sb.compat_feature_names().join(","))?;
+        kv("incompat_features", img.sb.incompat_feature_names().join(","))?;
+        kv("digest_xattr", img.ishare_xattr_name().unwrap_or_default())?;
+        kv(
+            "repack",
+            format!(
+                "erofs-rs pack {} {}_repack.img --algo {algo} {}--block-size {} --timestamp {ts} --uuid {uuid} --fs-config {} --file-contexts {}",
+                extract_dir.display(),
+                image_base_name,
+                if big_pc { "--pcluster 16384 " } else { "" },
+                img.sb.block_size,
+                fs_config_path.display(),
+                file_contexts_path.display()
+            ),
+        )?;        Some(p)
     } else {
         None
     };
@@ -138,7 +135,7 @@ pub fn write_android_configs(
     Ok(GeneratedConfigs {
         fs_config_path,
         file_contexts_path,
-        mkfs_options_path,
+        build_info_path,
     })
 }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 //! Multi-threaded EROFS extractor with Android config export (`fs_config`, `file_contexts`,
-//! `mkfs_options`), hardlink preservation, Windows-safe path handling, and digest verification.
+//! `build_info`), hardlink preservation, Windows-safe path handling, and digest verification.
 
 use crate::android_cfg::write_android_configs;
 use crate::error::{ErofsError, Result};
@@ -37,7 +37,7 @@ pub struct ExtractReport {
     pub config_dir: Option<String>,
     pub fs_config: Option<String>,
     pub file_contexts: Option<String>,
-    pub mkfs_options: Option<String>,
+    pub build_info: Option<String>,
     pub files_extracted: usize,
     pub dirs_created: usize,
     pub symlinks_created: usize,
@@ -152,9 +152,9 @@ pub fn extract_image(img: &ErofsImage, opts: &ExtractOptions) -> Result<ExtractR
             file_contexts: configs
                 .as_ref()
                 .map(|c| c.file_contexts_path.display().to_string()),
-            mkfs_options: configs
+            build_info: configs
                 .as_ref()
-                .and_then(|c| c.mkfs_options_path.as_ref())
+                .and_then(|c| c.build_info_path.as_ref())
                 .map(|p| p.display().to_string()),
             files_extracted: 0,
             dirs_created: 0,
@@ -388,9 +388,9 @@ pub fn extract_image(img: &ErofsImage, opts: &ExtractOptions) -> Result<ExtractR
         file_contexts: configs
             .as_ref()
             .map(|c| c.file_contexts_path.display().to_string()),
-        mkfs_options: configs
+        build_info: configs
             .as_ref()
-            .and_then(|c| c.mkfs_options_path.as_ref())
+            .and_then(|c| c.build_info_path.as_ref())
             .map(|p| p.display().to_string()),
         files_extracted: files_extracted.load(Ordering::Relaxed),
         dirs_created: dirs_created.load(Ordering::Relaxed),

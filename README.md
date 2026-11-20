@@ -1,6 +1,6 @@
 # erofs-rs
 
-Native Rust toolkit for **EROFS** images: inspect, multi-threaded Android ROM extraction (`fs_config` / `file_contexts` / `mkfs_options`), pack (`none`, `lz4`, `lz4hc`, `deflate`, `zstd`, `lzma`), verify, **direct in-place/append editing without unpacking**, **in-place compaction**, AVB footer handling, Android Sparse support, and cross-partition symlink resolution.
+Native Rust toolkit for **EROFS** images: inspect, multi-threaded Android ROM extraction (`fs_config` / `file_contexts` / `build_info`), pack (`none`, `lz4`, `lz4hc`, `deflate`, `zstd`, `lzma`), verify, **direct in-place/append editing without unpacking**, **in-place compaction**, AVB footer handling, Android Sparse support, and cross-partition symlink resolution.
 
 ## Build
 
@@ -33,7 +33,7 @@ erofs-rs stat product.img /etc/build.prop
 erofs-rs read product.img /etc/build.prop
 erofs-rs read product.img /etc/build.prop --check-text --json
 
-# Multi-threaded unpack + Android fs_config / file_contexts / mkfs_options
+# Multi-threaded unpack + Android fs_config / file_contexts / build_info
 erofs-rs unpack product.img -o ./out --overwrite
 erofs-rs unpack product.img -o ./out --config-only
 erofs-rs unpack product.img -o ./out --target /etc --recursive
