@@ -1,0 +1,8 @@
+erofs-rs is licensed under the MIT License (see LICENSE).
+
+It was written in Rust with reference to the EROFS on-disk format and to
+erofs-utils (https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git),
+which is available under GPL-2.0+ OR MIT. Parts of the format handling and
+compressed-extent mapping follow the logic of erofs-utils and the Linux kernel
+EROFS code; their copyright holders (Gao Xiang, Huawei, Alibaba Cloud, OPPO and
+other contributors) retain their copyrights.
