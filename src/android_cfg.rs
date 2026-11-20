@@ -127,7 +127,8 @@ pub fn write_android_configs(
                 fs_config_path.display(),
                 file_contexts_path.display()
             ),
-        )?;        Some(p)
+        )?;
+        Some(p)
     } else {
         None
     };
