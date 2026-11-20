@@ -1,6 +1,6 @@
-# erofs-rs (MIT License)
+# erofs-rs
 
-MIT-licensed native Rust toolkit for **EROFS** images — combining full image inspection, multi-threaded Android ROM extraction (`fs_config` / `file_contexts` / `mkfs_options`), image packing (`none`, `lz4`, `lz4hc`, `deflate`, `zstd`, `lzma`), integrity verification, **direct in-place/append editing without unpacking**, **in-place compaction**, **AVB footer management**, **Android Sparse support**, and **cross-partition symlink resolution**.
+Native Rust toolkit for **EROFS** images: inspect, multi-threaded Android ROM extraction (`fs_config` / `file_contexts` / `mkfs_options`), pack (`none`, `lz4`, `lz4hc`, `deflate`, `zstd`, `lzma`), verify, **direct in-place/append editing without unpacking**, **in-place compaction**, AVB footer handling, Android Sparse support, and cross-partition symlink resolution.
 
 ## Build
 
